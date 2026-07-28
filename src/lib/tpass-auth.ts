@@ -12,14 +12,37 @@ import { cookies } from "next/headers";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { authConfig } from "@/config/auth";
 
+// 權限 claim 本體（契約 v2 Phase 6，跟 tpass-auth/src/lib/permissions/types.ts 同型別）。
+export type Role = "admin" | "moderator" | "default";
+export type Restriction = "none" | "warning" | "ban";
+
+export interface PermissionEntry {
+  read: boolean; // 必有。唯一必看欄位（= restriction !== "ban"）
+  role: Role; // 必有。admin 隱含 moderator
+  restriction?: Restriction; // 省略 = none
+  reason?: string; // 只在 restriction !== "none" 時出現
+  until?: number; // 選填 Unix 秒，管制到期自動解除
+}
+
 // T-Pass 通行證的身分內容（對接合約，詳見 tpass-auth/INTEGRATION.md）。
 export interface TPassClaims {
   sub: string;
   email: string;
   name: string;
-  // 授權章：此持有人在本服務屬於哪些群組（例 admin / super-admin）。授權只看這個。
-  groups: string[];
+  // 授權本體（Phase 6）：此持有人在「本服務」的權限。一般服務 token 只含自己 serviceId 一把 key。
+  permissions: Record<string, PermissionEntry>;
   exp: number;
+}
+
+// 安全預設（務必保留）：claim 缺 permissions、或沒有自己 serviceId 的 key
+// → 視為舊版 token（auth 尚未升級 / 相容期）或匿名初始態，一律當作「能看、一般使用者」，
+// 不因為契約升級就把既有使用者擋在外面。
+const DEFAULT_PERMISSION: PermissionEntry = { read: true, role: "default" };
+
+// 回本服務（config 的 serviceId）在這張通行證上的權限 entry。各層授權判斷的唯一入口。
+export function permOf(session: TPassClaims | null | undefined): PermissionEntry {
+  if (!session) return DEFAULT_PERMISSION;
+  return session.permissions?.[authConfig.serviceId] ?? DEFAULT_PERMISSION;
 }
 
 // createRemoteJWKSet 內建記憶體快取 + 依 kid 選鑰 + 金鑰輪替時自動重抓。
@@ -39,7 +62,10 @@ export async function verifySession(
       sub: payload.sub as string,
       email: payload.email as string,
       name: payload.name as string,
-      groups: Array.isArray(payload.groups) ? (payload.groups as string[]) : [],
+      permissions:
+        payload.permissions && typeof payload.permissions === "object"
+          ? (payload.permissions as Record<string, PermissionEntry>)
+          : {},
       exp: payload.exp as number,
     };
   } catch {

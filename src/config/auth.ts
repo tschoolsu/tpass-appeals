@@ -31,6 +31,22 @@ export function loginUrlFor(returnPath = "/"): string {
   return u.toString();
 }
 
+// /denied 頁（Phase 6 ban 攔截用）：選填 env，未設就由 AUTH_AUTHORIZE_URL 的 origin 推導
+// ——auth 固定把它掛在自己網域的 /denied，不值得為此多開一顆必填 env。
+function deniedBaseUrl(): string {
+  return (
+    process.env.AUTH_DENIED_URL ||
+    `${new URL(process.env.AUTH_AUTHORIZE_URL!).origin}/denied`
+  );
+}
+
+// reason 絕不放進這裡的 query string（auth 的 /denied 自己憑 session 在 server side 重查）。
+export function deniedUrlFor(): string {
+  const u = new URL(deniedBaseUrl());
+  u.searchParams.set("service", serviceId);
+  return u.toString();
+}
+
 export const authConfig = {
   jwksUrl: process.env.AUTH_JWKS_URL!,
   loginUrl: loginUrlFor("/"),
