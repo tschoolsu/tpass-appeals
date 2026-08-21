@@ -31,6 +31,9 @@ export interface TPassClaims {
   name: string;
   // 授權本體（Phase 6）：此持有人在「本服務」的權限。一般服務 token 只含自己 serviceId 一把 key。
   permissions: Record<string, PermissionEntry>;
+  // 民國入學學年度（契約 v2）。老師／職務帳號與舊 token 沒有這個欄位 → null，
+  // 由 deriveGrade 自行 fallback 回信箱推算。
+  entryYear: number | null;
   exp: number;
 }
 
@@ -66,6 +69,7 @@ export async function verifySession(
         payload.permissions && typeof payload.permissions === "object"
           ? (payload.permissions as Record<string, PermissionEntry>)
           : {},
+      entryYear: typeof payload.entryYear === "number" ? payload.entryYear : null,
       exp: payload.exp as number,
     };
   } catch {

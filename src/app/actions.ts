@@ -49,7 +49,7 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
 
   const respondentName = session.name;
   const respondentEmail = session.email;
-  const respondentGrade = deriveGrade(session.email);
+  const respondentGrade = deriveGrade(session);
 
   // DB 為唯一真相來源／備份，永遠先寫這筆——Discord 通知失敗不影響這裡的結果。
   await prisma.appeal.create({
