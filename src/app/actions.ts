@@ -5,6 +5,8 @@ import { Prisma } from "@prisma/client";
 import { requireSession } from "@/lib/guard";
 import { prisma } from "@/lib/db";
 import { listQuestions } from "@/lib/questions";
+import { findBlockingAppeal } from "@/lib/appeals";
+import { COOLDOWN_MS } from "@/lib/cooldown";
 import { validateAnswers, collectUploadIds, type AnswerMap } from "@/lib/answers";
 import { getSettings } from "@/lib/settings";
 import { deriveGrade } from "@/lib/grade";
@@ -47,17 +49,14 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
   }
 
   // 冷卻：同一人短時間內只收一件，防灌爆 DB 與 Discord 頻道（安全審查 L2）。
-  // 用最近一筆申訴的時間判斷，免加表；極端並發下的毫秒級競態可容忍（頂多多一件）。
-  const cooldownMs = 30 * 60 * 1000;
-  const recent = await prisma.appeal.findFirst({
-    where: {
-      respondentSub: session.sub,
-      submittedAt: { gt: new Date(Date.now() - cooldownMs) },
-    },
-    select: { id: true },
-  });
-  if (recent) {
-    return { ok: false, message: "剛剛已送出過申訴，請稍後再試（每 30 分鐘限一件）。" };
+  // 用最近一筆未豁免申訴的時間判斷，免加表；規則見 lib/cooldown.ts。
+  // 極端並發下的毫秒級競態可容忍（頂多多一件）。
+  const blocking = await findBlockingAppeal(session.sub);
+  if (blocking) {
+    return {
+      ok: false,
+      message: `剛剛已送出過申訴，請稍後再試（每 ${COOLDOWN_MS / 60_000} 分鐘限一件）。`,
+    };
   }
 
   const respondentName = session.name;

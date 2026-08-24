@@ -42,6 +42,12 @@ model Appeal {
   answers         Json // { [questionId]: value }，送出當下的快照
   submittedAt     DateTime @default(now())
 
+  // 冷卻豁免：管理員在後台放行後標記，冷卻查詢會略過這筆（見 src/lib/cooldown.ts）。
+  // 標在申訴上而非另開表——冷卻本來就是從這筆的 submittedAt 推導出來的，
+  // 這樣天然是一次性放行：學生補送的新申訴會產生自己的新冷卻。
+  cooldownWaivedAt DateTime?
+  cooldownWaivedBy String? // 解除者 email，稽核用
+
   @@index([submittedAt])
   // 冷卻查詢用（actions.ts：同一人最近 N 分鐘內是否已送過）
   @@index([respondentSub, submittedAt])

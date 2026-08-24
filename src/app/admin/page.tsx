@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { listAppeals } from "@/lib/appeals";
 import { gradeLabel } from "@/lib/grade";
+import { isCoolingDown } from "@/lib/cooldown";
 import { Badge } from "@/components/ui/primitives";
 
 export default async function AppealsPage() {
@@ -31,6 +32,9 @@ export default async function AppealsPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold truncate">{a.respondentName}</span>
                 {a.respondentGrade && <Badge>{gradeLabel(a.respondentGrade)}</Badge>}
+                {isCoolingDown(a) && (
+                  <Badge className="bg-accent text-primary-foreground">冷卻中</Badge>
+                )}
               </div>
               <p className="mt-1 font-mono text-[11px] text-muted-foreground truncate">
                 {a.respondentEmail} ·{" "}
