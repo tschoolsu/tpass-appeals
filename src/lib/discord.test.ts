@@ -79,6 +79,21 @@ describe("postAppealToDiscord", () => {
     expect(payload.embeds[0].footer.text).toBe("ming@example.com");
   });
 
+  // 名字只放 thread 標題不夠：轉發、通知、搜尋結果都可能只看到 embed 本體。
+  it("embed 頂部寫出申訴人是誰（含年級）", async () => {
+    const { body } = await captureWebhook((url) =>
+      postAppealToDiscord(url, [q], answers, { ...who, grade: 2 }),
+    );
+    expect(JSON.parse(body.toString()).embeds[0].author.name).toBe("小明 · 高二");
+  });
+
+  it("推不出年級（老師／已畢業）時只寫名字，不留贅字", async () => {
+    const { body } = await captureWebhook((url) =>
+      postAppealToDiscord(url, [q], answers, { ...who, grade: null }),
+    );
+    expect(JSON.parse(body.toString()).embeds[0].author.name).toBe("小明");
+  });
+
   // 這是本次修復的核心：圖片必須以位元組送進 Discord。塞 URL 是沒用的——
   // /api/files 是 admin cookie 保護的，Discord CDN 抓不到。
   it("有圖片時走 multipart，且真的帶位元組", async () => {

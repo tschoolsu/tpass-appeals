@@ -85,7 +85,7 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
     settings.discordWebhookUrl,
     questions,
     answers,
-    { name: respondentName, email: respondentEmail },
+    { name: respondentName, email: respondentEmail, grade: respondentGrade },
     orderedAttachments,
   );
 

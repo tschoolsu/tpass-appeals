@@ -8,6 +8,7 @@
 import "server-only";
 import type { QuestionView } from "@/lib/questions";
 import { answerToText } from "@/lib/answer-format";
+import { gradeLabel } from "@/lib/grade";
 import { getObject } from "@/lib/storage";
 import { sniffImageMime } from "@/lib/image";
 
@@ -20,6 +21,7 @@ const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 interface Respondent {
   name: string;
   email: string;
+  grade?: number | null; // 推不出來（老師／已畢業）就是 null，不顯示
 }
 
 export interface AppealAttachment {
@@ -90,11 +92,16 @@ export async function postAppealToDiscord(
     timeZone: "Asia/Taipei",
   })}`.slice(0, 100);
 
+  // 申訴人也寫進 embed 本體：只放 thread 標題的話，轉發、通知、搜尋結果裡就看不出是誰。
+  const label = gradeLabel(respondent.grade ?? null);
+  const author = label ? `${respondent.name} · ${label}` : respondent.name;
+
   const payload = {
     thread_name: threadName,
     embeds: [
       {
         title: "新申訴",
+        author: { name: author.slice(0, 256) }, // Discord author.name 上限
         description: body,
         footer: { text: respondent.email },
         timestamp: new Date().toISOString(),
