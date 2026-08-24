@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { requireSession } from "@/lib/guard";
 import { prisma } from "@/lib/db";
 import { listQuestions } from "@/lib/questions";
-import { validateAnswers, type AnswerMap } from "@/lib/answers";
+import { validateAnswers, collectUploadIds, type AnswerMap } from "@/lib/answers";
 import { getSettings } from "@/lib/settings";
 import { deriveGrade } from "@/lib/grade";
 import { postAppealToDiscord } from "@/lib/discord";
@@ -31,6 +31,19 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
   const fieldErrors = validateAnswers(questions, answers);
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, errors: fieldErrors, message: "有題目尚未完成。" };
+  }
+
+  // 附件引用一律回查 DB 並綁 uploaderSub——答案 JSON 是 client 送來的，
+  // 沒有這一關就能偽造 id、或引用別人上傳的檔案。
+  const uploadIds = collectUploadIds(answers);
+  const uploads = uploadIds.length
+    ? await prisma.upload.findMany({
+        where: { id: { in: uploadIds }, uploaderSub: session.sub },
+        select: { id: true, storageKey: true, filename: true },
+      })
+    : [];
+  if (uploads.length !== new Set(uploadIds).size) {
+    return { ok: false, message: "附件無效或已失效，請重新上傳。" };
   }
 
   // 冷卻：同一人短時間內只收一件，防灌爆 DB 與 Discord 頻道（安全審查 L2）。
@@ -62,10 +75,20 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
     },
   });
 
-  await postAppealToDiscord(settings.discordWebhookUrl, questions, answers, {
-    name: respondentName,
-    email: respondentEmail,
-  });
+  // 附件依答案裡的出現順序送，讓 Discord 上的排列跟表單一致。
+  const byUploadId = new Map(uploads.map((u) => [u.id, u]));
+  const orderedAttachments = uploadIds
+    .map((id) => byUploadId.get(id))
+    .filter((u): u is (typeof uploads)[number] => u !== undefined)
+    .map((u) => ({ storageKey: u.storageKey, filename: u.filename }));
+
+  await postAppealToDiscord(
+    settings.discordWebhookUrl,
+    questions,
+    answers,
+    { name: respondentName, email: respondentEmail },
+    orderedAttachments,
+  );
 
   return { ok: true };
 }

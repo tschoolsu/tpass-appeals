@@ -118,6 +118,9 @@ function Field({
   }
 }
 
+// 檔案挑選器的過濾（只是方便，不是把關——真正的把關在 /api/upload 嗅探位元組）。
+const ACCEPT = "image/png,image/jpeg,image/gif,image/webp,application/pdf";
+
 function FileField({
   q,
   value,
@@ -157,7 +160,17 @@ function FileField({
         fd.set("questionId", q.id);
         const res = await fetch("/api/upload", { method: "POST", body: fd });
         if (!res.ok) {
-          setErr("上傳失敗，請再試一次");
+          // 伺服器端是嗅探位元組而非看副檔名，所以 415 要講清楚是格式問題，
+          // 否則使用者會對著同一個檔案一直重試。
+          setErr(
+            res.status === 415
+              ? `「${file.name}」格式不支援（只接受 PNG / JPEG / GIF / WebP / PDF）`
+              : res.status === 429
+                ? "今日上傳次數已達上限，請明天再試"
+                : res.status === 413
+                  ? `「${file.name}」超過 ${maxSizeMB}MB`
+                  : "上傳失敗，請再試一次",
+          );
           continue;
         }
         const data = (await res.json()) as { id: string; filename: string };
@@ -183,12 +196,13 @@ function FileField({
           type="file"
           hidden
           multiple
+          accept={ACCEPT}
           disabled={!canUpload || busy}
           onChange={(e) => handleFiles(e.target.files)}
         />
       </label>
       <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-        最多 {maxFiles} 個，單檔 ≤ {maxSizeMB}MB
+        圖片或 PDF，最多 {maxFiles} 個，單檔 ≤ {maxSizeMB}MB
       </p>
       {files.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1">

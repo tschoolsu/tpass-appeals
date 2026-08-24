@@ -48,3 +48,18 @@ export function validateAnswers(
   }
   return errors;
 }
+
+// 從答案裡把 file_upload 引用到的 upload id 全撈出來。
+// 用在：後台顯示附件（查 mime 決定要不要縮圖）、送出時驗證引用是否屬於本人。
+export function collectUploadIds(answers: AnswerMap): string[] {
+  const ids: string[] = [];
+  for (const value of Object.values(answers)) {
+    if (!Array.isArray(value)) continue;
+    for (const f of value) {
+      if (f && typeof f === "object" && typeof (f as { id?: unknown }).id === "string") {
+        ids.push((f as { id: string }).id);
+      }
+    }
+  }
+  return ids;
+}
