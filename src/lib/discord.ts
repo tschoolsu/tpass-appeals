@@ -2,21 +2,16 @@
 // 失敗只 log 不外拋——DB 才是唯一真相來源，Discord 掛掉不該讓學生看到送出失敗。
 // 逾時保護比照 tmsg 的 src/lib/chat.ts（AbortSignal.timeout）。
 //
-// 圖片附件走 multipart（payload_json + files[n]）把位元組直接送進 Discord。
-// 不能改用「embed 放圖片 URL」——/api/files 是 admin cookie 保護的，Discord CDN
-// 抓不到，只會得到一個破圖。
+// ⚠️ 這則通知**只送辨識資訊，不送內容**（2026-08-26 加固計畫 A4）。
+// 理由：Discord 頻道的成員名單不在 T-Pass 的權限模型裡——auth 的 /admin 把某人的 role
+// 降回 default 只擋得住後台，擋不住頻道；卸任、畢業都不會自動收權。而且 Discord 沒有
+// 稽核紀錄、沒有保留政策，附件一旦上傳就等於在 /api/files 的 admin cookie 之外多開一條
+// 沒有驗證的取檔路徑。申訴內容常含糾紛細節與第三人姓名，而申訴的對象很可能就在頻道裡。
+// 🚫 不要「順手」把答案、email 或附件加回來。要看內容就點連結進後台，那裡才管得住。
 import "server-only";
-import type { QuestionView } from "@/lib/questions";
-import { answerToText } from "@/lib/answer-format";
 import { gradeLabel } from "@/lib/grade";
-import { getObject } from "@/lib/storage";
-import { sniffImageMime } from "@/lib/image";
 
-const TIMEOUT_MS = 20_000; // 帶附件後比純文字慢，比原本的 10 秒放寬
-const MAX_FILES = 10; // Discord 單則訊息附件數上限
-// Discord 免費 guild 的單則總大小上限。官方已從 8 調高，但這裡保守——
-// 超過會讓整則 webhook 失敗（雖然不影響申訴本身，但通知就沒了）。
-const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+const TIMEOUT_MS = 10_000;
 
 interface Respondent {
   name: string;
@@ -24,69 +19,15 @@ interface Respondent {
   grade?: number | null; // 推不出來（老師／已畢業）就是 null，不顯示
 }
 
-export interface AppealAttachment {
-  storageKey: string;
-  filename: string;
-}
-
-// 讀出真的是圖片、且塞得進預算的附件。位元組要重新嗅探——DB 裡的 mime 是
-// 上傳者給的 file.type，不可信。
-async function collectImageAttachments(
-  candidates: AppealAttachment[],
-): Promise<{ files: Array<{ filename: string; bytes: Uint8Array<ArrayBuffer> }>; skipped: number }> {
-  const files: Array<{ filename: string; bytes: Uint8Array<ArrayBuffer> }> = [];
-  let used = 0;
-  let skipped = 0;
-
-  for (const c of candidates) {
-    if (files.length >= MAX_FILES) {
-      skipped++;
-      continue;
-    }
-    let buf: Buffer | null = null;
-    try {
-      buf = await getObject(c.storageKey);
-    } catch (err) {
-      console.error("[discord] 讀取附件失敗", c.storageKey, err);
-    }
-    if (!buf) {
-      skipped++;
-      continue;
-    }
-    // 明確配置一塊 ArrayBuffer 再複製——Buffer 背後可能是 SharedArrayBuffer，
-    // 型別上不能直接當 BlobPart 用。
-    const bytes = new Uint8Array(new ArrayBuffer(buf.byteLength));
-    bytes.set(buf);
-    if (!sniffImageMime(bytes)) continue; // 非圖片：不附加，也不算「被略過的圖」
-    if (used + bytes.byteLength > MAX_ATTACHMENT_BYTES) {
-      skipped++;
-      continue;
-    }
-    used += bytes.byteLength;
-    files.push({ filename: c.filename, bytes });
-  }
-
-  return { files, skipped };
-}
-
+// appealUrl 由呼叫端組（`${authConfig.selfUrl}/admin/appeals/<id>`）——本檔不讀 env，
+// 維持純格式化，網域一律 env 驅動。
 export async function postAppealToDiscord(
   webhookUrl: string | null,
-  questions: QuestionView[],
-  answers: Record<string, unknown>,
+  appealUrl: string,
   respondent: Respondent,
-  attachments: AppealAttachment[] = [],
+  attachmentCount = 0,
 ): Promise<void> {
   if (!webhookUrl) return;
-
-  const { files, skipped } = await collectImageAttachments(attachments);
-
-  let body = questions
-    .map((q) => `**${q.title}**\n${answerToText(q, answers[q.id]) || "（未作答）"}`)
-    .join("\n\n")
-    .slice(0, 3900); // embed description 上限 4096，留緩衝給下面那行註記
-  if (skipped > 0) {
-    body += `\n\n_另有 ${skipped} 個附件過大或無法讀取，請至後台查看。_`;
-  }
 
   const threadName = `${respondent.name} - ${new Date().toLocaleString("zh-TW", {
     timeZone: "Asia/Taipei",
@@ -96,39 +37,27 @@ export async function postAppealToDiscord(
   const label = gradeLabel(respondent.grade ?? null);
   const author = label ? `${respondent.name} · ${label}` : respondent.name;
 
+  // 附件只報數量，不報檔名——檔名本身就可能是實名或事件描述。
+  const lines = [`內容不在此顯示，請至後台查看：[開啟這筆申訴](${appealUrl})`];
+  if (attachmentCount > 0) lines.push(`（含 ${attachmentCount} 個附件）`);
+
   const payload = {
     thread_name: threadName,
     embeds: [
       {
         title: "新申訴",
         author: { name: author.slice(0, 256) }, // Discord author.name 上限
-        description: body,
-        footer: { text: respondent.email },
+        description: lines.join("\n"),
         timestamp: new Date().toISOString(),
       },
     ],
   };
 
   try {
-    // 有附件就走 multipart（不要自己設 Content-Type，讓 fetch 帶 boundary）。
-    let requestBody: BodyInit;
-    let headers: HeadersInit | undefined;
-    if (files.length > 0) {
-      const fd = new FormData();
-      fd.set("payload_json", JSON.stringify(payload));
-      files.forEach((f, i) => {
-        fd.set(`files[${i}]`, new Blob([f.bytes]), f.filename);
-      });
-      requestBody = fd;
-    } else {
-      requestBody = JSON.stringify(payload);
-      headers = { "Content-Type": "application/json" };
-    }
-
     const res = await fetch(`${webhookUrl}?wait=true`, {
       method: "POST",
-      headers,
-      body: requestBody,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) {

@@ -11,6 +11,7 @@ import { validateAnswers, collectUploadIds, type AnswerMap } from "@/lib/answers
 import { getSettings } from "@/lib/settings";
 import { deriveGrade } from "@/lib/grade";
 import { postAppealToDiscord } from "@/lib/discord";
+import { authConfig } from "@/config/auth";
 
 export interface SubmitResult {
   ok: boolean;
@@ -41,7 +42,7 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
   const uploads = uploadIds.length
     ? await prisma.upload.findMany({
         where: { id: { in: uploadIds }, uploaderSub: session.sub },
-        select: { id: true, storageKey: true, filename: true },
+        select: { id: true },
       })
     : [];
   if (uploads.length !== new Set(uploadIds).size) {
@@ -64,7 +65,7 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
   const respondentGrade = deriveGrade(session);
 
   // DB 為唯一真相來源／備份，永遠先寫這筆——Discord 通知失敗不影響這裡的結果。
-  await prisma.appeal.create({
+  const appeal = await prisma.appeal.create({
     data: {
       respondentSub: session.sub,
       respondentName,
@@ -74,19 +75,12 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
     },
   });
 
-  // 附件依答案裡的出現順序送，讓 Discord 上的排列跟表單一致。
-  const byUploadId = new Map(uploads.map((u) => [u.id, u]));
-  const orderedAttachments = uploadIds
-    .map((id) => byUploadId.get(id))
-    .filter((u): u is (typeof uploads)[number] => u !== undefined)
-    .map((u) => ({ storageKey: u.storageKey, filename: u.filename }));
-
+  // 通知只帶辨識資訊與後台連結，內容與附件一律不出境（加固計畫 A4，理由見 lib/discord.ts）。
   await postAppealToDiscord(
     settings.discordWebhookUrl,
-    questions,
-    answers,
+    `${authConfig.selfUrl}/admin/appeals/${appeal.id}`,
     { name: respondentName, email: respondentEmail, grade: respondentGrade },
-    orderedAttachments,
+    uploads.length,
   );
 
   return { ok: true };
