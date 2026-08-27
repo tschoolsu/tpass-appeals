@@ -48,15 +48,17 @@ jobs:
       JWT_ISSUER: https://ci.invalid
 
     steps:
-      - uses: actions/checkout@v4
+      # action 版本明寫死。GitHub 的 runner 會把 node20 時代的 action 強制跑在 node24 上並警告，
+      # 一路釘在最新的大版本就不會累積這種待爆的技術債。
+      - uses: actions/checkout@v7
 
       # 順序有意義：pnpm 要先裝好，下一步的 cache: pnpm 才找得到它來算快取路徑。
       # 版本不寫在這裡——action 會讀 package.json 的 packageManager 欄位（pnpm@10.27.0）,
       # 跟本機、主機是同一個真相來源。
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
 
       # 22 是刻意的：主機跑的就是 node v22。CI 綠了但主機炸掉是最沒有價值的綠燈。
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm
