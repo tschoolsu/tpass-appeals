@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { LogIn } from "lucide-react";
 import { requireSession } from "@/lib/guard";
-import { getSession } from "@/lib/tpass-auth";
+import { tpass, authConfig } from "@/config/auth";
 import { listQuestions } from "@/lib/questions";
 import { getSettings } from "@/lib/settings";
-import { authConfig } from "@/config/auth";
 import { isAdmin } from "@/config/admin";
 import { PortalLink } from "@/components/common/PortalLink";
 import { AppealForm } from "@/components/AppealForm";
@@ -46,7 +45,7 @@ export default async function HomePage({
   // 剛登出（auth 導回來帶 ?logout=1）時不能再導去登入，否則會被立刻彈回去、等於登不出去。
   // logout=1 只是畫面提示、不是憑證，所以仍要確認 session 真的無效才採信。
   const { logout } = await searchParams;
-  if (logout === "1" && !(await getSession())) return <LoggedOutNotice />;
+  if (logout === "1" && !(await tpass.getSession())) return <LoggedOutNotice />;
 
   const session = await requireSession("/");
   const [questions, settings, admin] = await Promise.all([

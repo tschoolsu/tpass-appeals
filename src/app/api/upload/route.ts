@@ -5,7 +5,7 @@
 // 結果存進 Upload.mime——這樣新資料的 mime 是可信的。舊資料仍是 client 值，
 // 所以 /api/files 的 inline 分支還是會再嗅探一次。
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/tpass-auth";
+import { tpass } from "@/config/auth";
 import { prisma } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { newStorageKey, putObject } from "@/lib/storage";
@@ -17,7 +17,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_UPLOADS_PER_USER_PER_DAY = 30;
 
 export async function POST(request: Request) {
-  const session = await getSession();
+  const session = await tpass.getSession();
   if (!session) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }

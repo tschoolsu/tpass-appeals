@@ -4,15 +4,16 @@
 //   admin      —— 超管專屬功能
 //   moderator  —— 一般管理功能
 import "server-only";
-import { permOf, type TPassClaims } from "@/lib/tpass-auth";
+import type { TPassClaims } from "tpass-auth-js";
+import { tpass } from "@/config/auth";
 
 export function isSuperAdmin(session: TPassClaims | null | undefined): boolean {
-  return permOf(session).role === "admin";
+  return tpass.permOf(session).role === "admin";
 }
 
 export function isAdmin(session: TPassClaims | null | undefined): boolean {
   if (!session) return false;
-  return permOf(session).role !== "default";
+  return tpass.permOf(session).role !== "default";
 }
 
 // warning 管制資訊：restriction==="warning" 時回 reason/until，否則 null。
@@ -20,7 +21,7 @@ export function isAdmin(session: TPassClaims | null | undefined): boolean {
 export function warningOf(
   session: TPassClaims | null | undefined,
 ): { reason?: string; until?: number } | null {
-  const perm = permOf(session);
+  const perm = tpass.permOf(session);
   if (perm.restriction !== "warning") return null;
   return { reason: perm.reason, until: perm.until };
 }

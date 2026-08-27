@@ -5,14 +5,14 @@
 // `?inline=1` 是給後台縮圖預覽用的窄門：**重新嗅探位元組**，只有真的是白名單
 // raster 格式才 inline，且回嗅探值而非 DB 裡那個字串。
 import { NextResponse, type NextRequest } from "next/server";
-import { getSession } from "@/lib/tpass-auth";
+import { tpass } from "@/config/auth";
 import { isAdmin } from "@/config/admin";
 import { prisma } from "@/lib/db";
 import { getObject } from "@/lib/storage";
 import { sniffImageMime } from "@/lib/image";
 
 export async function GET(req: NextRequest, ctx: RouteContext<"/api/files/[id]">) {
-  const session = await getSession();
+  const session = await tpass.getSession();
   if (!session || !isAdmin(session)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

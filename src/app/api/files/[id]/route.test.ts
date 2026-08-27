@@ -6,7 +6,8 @@ const isAdmin = vi.fn();
 const findUnique = vi.fn();
 const getObject = vi.fn();
 
-vi.mock("@/lib/tpass-auth", () => ({ getSession: () => getSession() }));
+// 驗章實作在套件 tpass-auth-js，route 拿到的是 config 綁好的實例（C1）——所以 mock 的是那個實例。
+vi.mock("@/config/auth", () => ({ tpass: { getSession: () => getSession() } }));
 vi.mock("@/config/admin", () => ({ isAdmin: (s: unknown) => isAdmin(s) }));
 vi.mock("@/lib/db", () => ({ prisma: { upload: { findUnique: (a: unknown) => findUnique(a) } } }));
 vi.mock("@/lib/storage", () => ({ getObject: (k: string) => getObject(k) }));
