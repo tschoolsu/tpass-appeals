@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Save } from "lucide-react";
 import type { AppealSettingsView } from "@/lib/settings";
 import { saveSettingsAction, type SettingsResult } from "@/app/admin/settings/actions";
-import { Input, Textarea, Label, Switch, Button } from "@/components/ui/primitives";
+import { Input, Textarea, Label, Switch, Button } from "tpass-ui";
 
 export function SettingsForm({ settings }: { settings: AppealSettingsView }) {
   const [state, action, pending] = useActionState<SettingsResult | null, FormData>(

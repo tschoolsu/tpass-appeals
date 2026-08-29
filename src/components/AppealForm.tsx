@@ -6,7 +6,7 @@ import { CheckCircle2, Send } from "lucide-react";
 import type { QuestionView } from "@/lib/questions";
 import { validateValue, type AnswerMap } from "@/lib/answers";
 import { QuestionRenderer } from "@/components/QuestionRenderer";
-import { Button } from "@/components/ui/primitives";
+import { Button } from "tpass-ui";
 import { submitAppealAction, type SubmitResult } from "@/app/actions";
 
 interface Props {

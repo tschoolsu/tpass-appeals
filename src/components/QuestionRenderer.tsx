@@ -5,7 +5,7 @@
 import * as React from "react";
 import { Upload, X } from "lucide-react";
 import type { QuestionView } from "@/lib/questions";
-import { Input, Textarea, cn } from "@/components/ui/primitives";
+import { Input, Textarea, cn } from "tpass-ui";
 
 export interface UploadedFile {
   id: string;

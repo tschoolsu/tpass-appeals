@@ -6,7 +6,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { TimerReset } from "lucide-react";
 import { waiveCooldownAction } from "@/app/admin/appeals/actions";
-import { Button } from "@/components/ui/primitives";
+import { Button } from "tpass-ui";
 
 export function CooldownPanel({
   appealId,

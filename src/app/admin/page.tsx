@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { listAppeals } from "@/lib/appeals";
 import { gradeLabel } from "@/lib/grade";
 import { isCoolingDown } from "@/lib/cooldown";
-import { Badge } from "@/components/ui/primitives";
+import { Badge } from "tpass-ui";
 
 export default async function AppealsPage() {
   const appeals = await listAppeals();

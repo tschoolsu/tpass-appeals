@@ -21,7 +21,7 @@ import {
   moveQuestionAction,
 } from "@/app/admin/questions/actions";
 import type { QuestionInput } from "@/lib/questions";
-import { Button, Input, Textarea, Select, Label, Switch, Badge, cn } from "@/components/ui/primitives";
+import { Button, Input, Textarea, Select, Label, Switch, Badge, cn } from "tpass-ui";
 
 export function QuestionEditor({ questions }: { questions: QuestionView[] }) {
   const router = useRouter();

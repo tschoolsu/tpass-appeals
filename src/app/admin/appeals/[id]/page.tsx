@@ -7,7 +7,7 @@ import { collectUploadIds } from "@/lib/answers";
 import { prisma } from "@/lib/db";
 import { gradeLabel } from "@/lib/grade";
 import { cooldownEndsAt, isCoolingDown } from "@/lib/cooldown";
-import { Badge } from "@/components/ui/primitives";
+import { Badge } from "tpass-ui";
 import { AnswerView } from "@/components/AnswerView";
 import { CooldownPanel } from "@/components/admin/CooldownPanel";
 
