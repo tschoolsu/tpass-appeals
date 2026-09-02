@@ -46,6 +46,9 @@ jobs:
       PORTAL_URL: https://ci.invalid
       TPASS_SERVICE_ID: appeals
       JWT_ISSUER: https://ci.invalid
+      # Prisma 7 的 prisma.config.ts 在載入時就解析 env("DATABASE_URL")，缺了連 prisma generate
+      # （postinstall 會跑）都起不來。CI 不會真的連線，給個形狀正確的假值就好。
+      DATABASE_URL: postgresql://ci:ci@ci.invalid:5432/ci
 
     steps:
       # action 版本明寫死。GitHub 的 runner 會把 node20 時代的 action 強制跑在 node24 上並警告，
