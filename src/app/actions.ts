@@ -1,7 +1,7 @@
 "use server";
 
 // 送出申訴。身分一律由伺服器從驗章後的 session 戳記帶入（一律具名，不做匿名分支）。
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { requireSession } from "@/lib/guard";
 import { prisma } from "@/lib/db";
 import { listQuestions } from "@/lib/questions";

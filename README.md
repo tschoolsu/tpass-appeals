@@ -10,8 +10,8 @@ TSchool 學生會的申訴收件系統：學生用學校帳號登入（T-Pass SS
 | 服務 id | `appeals`（tpass-ops `services.json`） |
 | 本機網址 | `https://appeals.lvh.me:3004` |
 | 正式網址 | `https://appeals.tschoolsu.org` |
-| 資料庫 | PostgreSQL（Prisma，`migrate` 策略，migrations 進 git） |
-| SSO | 消費端（契約 v2）：`src/lib/tpass-auth.ts` 驗章，只碰公鑰 |
+| 資料庫 | PostgreSQL（Prisma 7 + `@prisma/adapter-pg`，`src/lib/db.ts`）；schema 改動只透過 `prisma migrate dev` 產 migration，migrations 進 git |
+| SSO | 消費端（契約 v2）：驗章走共用套件 `tpass-auth-js`（`src/config/auth.ts` 綁 env，callback／logout route 各一行），只碰公鑰 |
 
 ## 開發
 

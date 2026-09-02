@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Next build symlink（worktree 測試用）
 .next
+
+# prisma generate 的產物（postinstall 會生）
+/src/generated

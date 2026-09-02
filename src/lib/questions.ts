@@ -1,7 +1,7 @@
 // 題目資料存取層。用獨立資料列 + order 欄位排序，不用大 JSON 文件——
 // 每題可獨立新增/刪除/更新，天然沒有 tpass-form 那種併發覆蓋問題，不需要樂觀鎖。
 import "server-only";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { qTypeSchema, optionsSchema, type QType, type Option } from "@/lib/question-schema";
 

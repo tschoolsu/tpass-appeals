@@ -2,12 +2,12 @@
 // 這裡只有一份申訴表單，題目彼此獨立、無分段/跳轉，所以用一張欄位化的
 // Question 表就夠了，不需要大 JSON 文件 + 樂觀鎖那套機制。
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // 單例設定列（id 固定 "singleton"）：申訴系統只有一份表單，用 key-value 表反而過度設計。
