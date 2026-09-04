@@ -1,6 +1,7 @@
 // 申訴案件（提交紀錄）資料存取層。DB 為唯一真相來源／備份，不受 Discord 通知成敗影響。
 import "server-only";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { COOLDOWN_MS } from "@/lib/cooldown";
 
 export interface AppealRow {
@@ -24,12 +25,15 @@ export async function getAppeal(id: string): Promise<AppealRow | null> {
   return row ? toRow(row) : null;
 }
 
-/** 提交前的冷卻檢查：這個人有沒有還在擋人的申訴（已被管理員豁免的不算）。 */
+// 提交前的冷卻檢查：這個人有沒有還在擋人的申訴（已被管理員豁免的不算）。
+// 接受 tx 是因為 actions.ts 把「查 + 建」包進同一交易並鎖 respondentSub 序列化——
+// 單獨呼叫 findFirst 再各自 create 中間沒鎖，並發下能無上限繞過冷卻。
 export async function findBlockingAppeal(
   respondentSub: string,
   now: Date = new Date(),
+  client: Prisma.TransactionClient = prisma,
 ): Promise<{ id: string } | null> {
-  return prisma.appeal.findFirst({
+  return client.appeal.findFirst({
     where: {
       respondentSub,
       submittedAt: { gt: new Date(now.getTime() - COOLDOWN_MS) },

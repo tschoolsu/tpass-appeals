@@ -49,31 +49,41 @@ export async function submitAppealAction(answers: AnswerMap): Promise<SubmitResu
     return { ok: false, message: "附件無效或已失效，請重新上傳。" };
   }
 
+  const respondentName = session.name;
+  const respondentEmail = session.email;
+  const respondentGrade = deriveGrade(session);
+
   // 冷卻：同一人短時間內只收一件，防灌爆 DB 與 Discord 頻道（安全審查 L2）。
   // 用最近一筆未豁免申訴的時間判斷，免加表；規則見 lib/cooldown.ts。
-  // 極端並發下的毫秒級競態可容忍（頂多多一件）。
-  const blocking = await findBlockingAppeal(session.sub);
-  if (blocking) {
+  // 查 + 建包進同一交易並用 advisory lock 鎖住 respondentSub 序列化——
+  // 單獨 findFirst 再 create 中間沒鎖，並發下能無上限繞過冷卻。
+  // DB 為唯一真相來源／備份，永遠先寫這筆——Discord 通知失敗不影響這裡的結果，
+  // 所以 postAppealToDiscord 留在交易之外（commit 之後才打）。
+  const appeal = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${session.sub}))`;
+
+    const blocking = await findBlockingAppeal(session.sub, new Date(), tx);
+    if (blocking) {
+      return null;
+    }
+
+    return tx.appeal.create({
+      data: {
+        respondentSub: session.sub,
+        respondentName,
+        respondentEmail,
+        respondentGrade,
+        answers: answers as Prisma.InputJsonValue,
+      },
+    });
+  }, { timeout: 10_000 });
+
+  if (!appeal) {
     return {
       ok: false,
       message: `剛剛已送出過申訴，請稍後再試（每 ${COOLDOWN_MS / 60_000} 分鐘限一件）。`,
     };
   }
-
-  const respondentName = session.name;
-  const respondentEmail = session.email;
-  const respondentGrade = deriveGrade(session);
-
-  // DB 為唯一真相來源／備份，永遠先寫這筆——Discord 通知失敗不影響這裡的結果。
-  const appeal = await prisma.appeal.create({
-    data: {
-      respondentSub: session.sub,
-      respondentName,
-      respondentEmail,
-      respondentGrade,
-      answers: answers as Prisma.InputJsonValue,
-    },
-  });
 
   // 通知只帶辨識資訊與後台連結，內容與附件一律不出境（加固計畫 A4，理由見 lib/discord.ts）。
   await postAppealToDiscord(

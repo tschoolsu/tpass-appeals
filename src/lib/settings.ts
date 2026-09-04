@@ -11,12 +11,21 @@ export interface AppealSettingsView {
   acceptingResponses: boolean;
 }
 
+// 對應 schema.prisma AppealSettings 的 @default，singleton 列還沒被建出來時當讀值。
+// 只有 updateSettings（管理員存檔）才會真的 upsert 出那一列——公開表單頁/送出/上傳
+// 每次都會呼叫 getSettings，read 用 upsert 等於把讀流量全變成搶同一列 row lock 的寫入。
+const DEFAULT_SETTINGS: AppealSettingsView = {
+  title: "學生申訴系統",
+  introText: "",
+  discordWebhookUrl: null,
+  acceptingResponses: true,
+};
+
 export async function getSettings(): Promise<AppealSettingsView> {
-  const row = await prisma.appealSettings.upsert({
-    where: { id: SINGLETON_ID },
-    create: { id: SINGLETON_ID },
-    update: {},
-  });
+  const row = await prisma.appealSettings.findUnique({ where: { id: SINGLETON_ID } });
+  if (!row) {
+    return DEFAULT_SETTINGS;
+  }
   return {
     title: row.title,
     introText: row.introText,

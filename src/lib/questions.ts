@@ -84,7 +84,15 @@ export async function updateQuestion(id: string, input: QuestionInput): Promise<
 }
 
 export async function deleteQuestion(id: string): Promise<void> {
-  await prisma.question.delete({ where: { id } }).catch(() => {});
+  try {
+    await prisma.question.delete({ where: { id } });
+  } catch (e) {
+    // 只吞「本來就不存在」（重複點刪除鍵之類），其他 DB 錯誤照拋，不要靜默吃掉。
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
+      return;
+    }
+    throw e;
+  }
 }
 
 // 上下移動：跟相鄰題交換 order。用交易避免中途讀到不一致狀態。

@@ -44,16 +44,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "file too large" }, { status: 413 });
   }
 
-  const recentCount = await prisma.upload.count({
-    where: {
-      uploaderSub: session.sub,
-      createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-    },
-  });
-  if (recentCount >= MAX_UPLOADS_PER_USER_PER_DAY) {
-    return NextResponse.json({ error: "too many uploads" }, { status: 429 });
-  }
-
   const buffer = Buffer.from(await file.arrayBuffer());
   const bytes = new Uint8Array(buffer);
   const mime = sniffImageMime(bytes) ?? (isPdf(bytes) ? "application/pdf" : null);
@@ -65,19 +55,54 @@ export async function POST(request: Request) {
   }
 
   const storageKey = newStorageKey();
-  await putObject(storageKey, buffer, mime);
 
-  const upload = await prisma.upload.create({
-    data: {
-      questionId,
-      storageKey,
-      filename: file.name,
-      mime,
-      size: file.size,
-      uploaderSub: session.sub,
+  // 每日上限的「數 + 建」包進同一交易，並用 advisory lock 序列化同一 uploaderSub 的並發
+  // 請求——原本 count 再 create 中間沒鎖，並發下能無上限繞過。putObject 是外部 I/O，
+  // 不能放進交易：交易只負責鎖 + count + 建 Upload 紀錄，寫檔留到交易 commit 之後；
+  // 寫檔失敗就把剛建的紀錄刪掉。
+  const result = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${session.sub}))`;
+
+      const recentCount = await tx.upload.count({
+        where: {
+          uploaderSub: session.sub,
+          createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+      });
+      if (recentCount >= MAX_UPLOADS_PER_USER_PER_DAY) {
+        return { ok: false as const };
+      }
+
+      const created = await tx.upload.create({
+        data: {
+          questionId,
+          storageKey,
+          filename: file.name,
+          mime,
+          size: file.size,
+          uploaderSub: session.sub,
+        },
+        select: { id: true, filename: true },
+      });
+      return { ok: true as const, upload: created };
     },
-    select: { id: true, filename: true },
-  });
+    { timeout: 10_000 },
+  );
 
-  return NextResponse.json({ id: upload.id, filename: upload.filename });
+  if (!result.ok) {
+    return NextResponse.json({ error: "too many uploads" }, { status: 429 });
+  }
+
+  try {
+    await putObject(storageKey, buffer, mime);
+  } catch (e) {
+    await prisma.upload.delete({ where: { id: result.upload.id } }).catch((delErr) => {
+      console.error(`[upload] putObject 失敗後刪除 Upload ${result.upload.id} 也失敗`, delErr);
+    });
+    console.error(`[upload] putObject 失敗，已刪除 Upload ${result.upload.id}`, e);
+    throw e;
+  }
+
+  return NextResponse.json({ id: result.upload.id, filename: result.upload.filename });
 }
